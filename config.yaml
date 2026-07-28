@@ -1,0 +1,192 @@
+# 安全工具调用智能体系统 - 全局配置
+
+# 模型配置
+# provider: ollama | openai (含DeepSeek/通义千问等OpenAI兼容接口)
+llm:
+  provider: "openai"           # 当前使用DeepSeek API测试
+  model: "deepseek-chat"       # deepseek-chat(V3) / deepseek-reasoner
+  api_key: "sk-4f69ec624bc54b85964546e7a21e38b3"  # 本地开发用，分享代码前用环境变量 DEEPSEEK_API_KEY 替代
+  base_url: "https://api.deepseek.com"  # DeepSeek官方接口
+  temperature: 0
+  max_iterations: 10
+
+# Ollama本地部署配置（备用，切换provider为ollama即可）
+# llm:
+#   provider: "ollama"
+#   model: "qwen2.5:7b"
+#   base_url: "http://localhost:11434"
+#   temperature: 0
+#   max_iterations: 10
+
+# 安全模块开关（实验对照用）
+security:
+  enabled: true
+  whitelist: true
+  permission: true
+  human_confirm: true
+  data_filter: true
+  audit: true
+
+# 工具白名单
+tools:
+  - name: "file_read"
+    description: "读取指定路径的文本文件内容"
+    risk_level: "low"
+    required_permission: "read"
+    params:
+      file_path: "str - 文件路径"
+
+  - name: "db_query"
+    description: "查询数据库中指定表的记录"
+    risk_level: "low"
+    required_permission: "read"
+    params:
+      table: "str - 表名"
+      condition: "str - 查询条件"
+
+  - name: "web_search"
+    description: "在互联网上搜索信息"
+    risk_level: "medium"
+    required_permission: "read"
+    params:
+      query: "str - 搜索关键词"
+
+  - name: "send_email"
+    description: "发送电子邮件给指定收件人"
+    risk_level: "high"
+    required_permission: "write"
+    params:
+      to: "str - 收件人邮箱"
+      subject: "str - 邮件主题"
+      body: "str - 邮件正文"
+
+  - name: "file_write"
+    description: "将内容写入指定路径的文件"
+    risk_level: "medium"
+    required_permission: "write"
+    params:
+      file_path: "str - 文件路径"
+      content: "str - 文件内容"
+
+  - name: "system_execute"
+    description: "执行系统命令（管理级操作）"
+    risk_level: "high"
+    required_permission: "admin"
+    params:
+      command: "str - 系统命令"
+
+# 权限等级定义
+permissions:
+  levels:
+    - name: "read"
+      rank: 1
+      description: "只读操作"
+    - name: "write"
+      rank: 2
+      description: "写入操作"
+    - name: "admin"
+      rank: 3
+      description: "管理员操作"
+
+# 任务类型到权限的映射
+task_permissions:
+  query_task: "read"
+  report_task: "read"
+  email_task: "write"
+  admin_task: "admin"
+
+# 高危确认配置
+human_confirm:
+  timeout_seconds: 60
+  auto_mode: false  # 自动评测时设为true
+  auto_rules:
+    send_email: "deny"  # 自动模式下高危工具的默认决策
+    system_execute: "deny"  # 系统命令自动拒绝
+
+# 数据过滤正则模式
+data_filter:
+  # 输入级注入检测模式（仅用于拦截用户输入中的提示注入攻击）
+  injection_patterns:
+    # 英文注入模式
+    - "ignore (all )?previous (instructions|commands)"
+    - "disregard (all )?previous"
+    - "forget (all )?previous"
+    - "new instructions"
+    - "override your"
+    - "jailbreak"
+    - "DAN mode"
+    - "developer mode"
+    - "do not follow (any |your )?previous"
+    - "\\[SYSTEM\\]"
+    - "\\[ADMIN\\]"
+    # 中文注入模式
+    - "忽略(之前|以上|所有).{0,6}(指令|命令|规则|设定)"
+    - "无视(之前|以上|所有).{0,6}(指令|命令|规则|设定)"
+    - "新(的)?指令"
+    - "pretend (you are|to be)"
+    - "act as (if|a)"
+  # 输出级数据泄露过滤模式（用于过滤工具返回结果中的敏感数据）
+  patterns:
+    - "ignore (all )?previous (instructions|commands)"
+    - "disregard (all )?previous"
+    - "forget (all )?previous"
+    - "you must (now |immediately )?"
+    - "system prompt"
+    - "act as if"
+    - "pretend you are"
+    - "new instructions"
+    - "override your"
+    - "jailbreak"
+    - "DAN mode"
+    - "developer mode"
+    - "do not follow (any |your )?previous"
+    - "IMPORTANT:.*call.*send_email"
+    - "URGENT:.*execute"
+    - "secret key|api key|password"
+    - "confidential|classified"
+    - "\\d{17}[\\dXx]"
+    - "password_hash"
+    - "\\bssn\\b|身份证号"
+    - "sk-[a-zA-Z0-9_-]{8,}"
+    - "\\[SYSTEM\\]"
+    - "\\[ADMIN\\]"
+    - "\\[FILTERED\\][^\\n]*@[a-zA-Z0-9]+\\.[a-z]+[^\\n]*"
+    # 敏感值过滤（secrets表等）
+    - "P@ssw0rd[^\\s]*"
+    - "jwt-secret[^\\s'\"]*"
+
+# 审计日志配置
+audit:
+  enabled: true
+  log_file: "audit_log.jsonl"
+  events:
+    - "user_input"
+    - "agent_reasoning"
+    - "tool_call_request"
+    - "whitelist_check"
+    - "permission_check"
+    - "human_confirm"
+    - "data_filter"
+    - "tool_execution"
+    - "tool_result"
+    - "security_violation"
+
+# 评测配置
+eval:
+  test_cases_file: "eval/test_cases.json"
+  output_dir: "eval/results"
+  modes:
+    - name: "baseline"
+      security_enabled: false
+      description: "无防护基线组"
+    - name: "camel"
+      security_enabled: true
+      whitelist: true
+      permission: true
+      human_confirm: false
+      data_filter: true
+      audit: false
+      description: "CaMeL式防御组（白名单+权限+关键词过滤）"
+    - name: "protected"
+      security_enabled: true
+      description: "全链路安全管控组"
